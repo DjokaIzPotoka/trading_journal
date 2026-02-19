@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-export type Market = "crypto" | "cfd" | "forex";
+export type Market = "crypto" | "cfd" | "forex" | "stocks";
 export type TradeType = "long" | "short";
 
 export type Trade = {
@@ -106,4 +106,54 @@ export async function insertTrade(row: {
 export async function deleteTrade(id: string) {
   const { error } = await supabase.from("trades").delete().eq("id", id);
   if (error) throw error;
+}
+
+/** Delete all trades from the table. Uses batch delete via .in("id", ids). */
+export async function deleteAllTrades(): Promise<void> {
+  const { data: rows, error: fetchError } = await supabase
+    .from("trades")
+    .select("id");
+  if (fetchError) throw fetchError;
+  const ids = (rows ?? []).map((r) => r.id);
+  if (ids.length === 0) return;
+  const { error: deleteError } = await supabase.from("trades").delete().in("id", ids);
+  if (deleteError) throw deleteError;
+}
+
+export type InsertTradeRow = {
+  symbol: string;
+  type: TradeType;
+  market: Market;
+  entry_price: number;
+  exit_price: number;
+  qty: number;
+  fees: number;
+  pnl: number;
+  pnl_percent: number;
+  notes?: string | null;
+  created_at?: string;
+};
+
+/**
+ * Batch insert trades. Optional created_at per row (e.g. from CSV date).
+ */
+export async function insertTradesBatch(rows: InsertTradeRow[]): Promise<{ inserted: number; error?: string }> {
+  if (rows.length === 0) return { inserted: 0 };
+  const now = new Date().toISOString();
+  const payload = rows.map((row) => ({
+    symbol: row.symbol.trim(),
+    type: row.type,
+    market: row.market,
+    entry_price: row.entry_price,
+    exit_price: row.exit_price,
+    fees: row.fees,
+    pnl: row.pnl,
+    pnl_percent: row.pnl_percent,
+    notes: row.notes?.trim() || null,
+    qty: row.qty,
+    created_at: row.created_at ?? now,
+  }));
+  const { data, error } = await supabase.from("trades").insert(payload).select("id");
+  if (error) return { inserted: 0, error: error.message };
+  return { inserted: (data ?? []).length };
 }

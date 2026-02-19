@@ -6,12 +6,14 @@ import {
   getTrades,
   getTradeStats,
   deleteTrade,
+  deleteAllTrades,
   type Trade,
   type Market,
   type TradeType,
 } from "../lib/trades";
 import { getStartingBalance } from "../lib/settings";
 import { AddTradeDialog } from "../components/trades/AddTradeDialog";
+import { ImportTradesModal } from "../components/trades/ImportTradesModal";
 
 function formatDate(iso: string) {
   try {
@@ -40,6 +42,7 @@ function formatPct(n: number) {
 export default function TradesPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
   const [totalBalance, setTotalBalance] = React.useState(0);
 
   const [search, setSearch] = React.useState("");
@@ -47,6 +50,7 @@ export default function TradesPage() {
   const [type, setType] = React.useState<TradeType | "">("");
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
+  const [confirmDeleteAll, setConfirmDeleteAll] = React.useState(false);
 
   const filters = React.useMemo(
     () => ({
@@ -81,6 +85,14 @@ export default function TradesPage() {
     },
   });
 
+  const deleteAllMutation = useMutation({
+    mutationFn: deleteAllTrades,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trades"] });
+      queryClient.invalidateQueries({ queryKey: ["tradeStats"] });
+    },
+  });
+
   const refetch = () => {
     queryClient.invalidateQueries({ queryKey: ["trades"] });
     queryClient.invalidateQueries({ queryKey: ["tradeStats"] });
@@ -94,13 +106,22 @@ export default function TradesPage() {
             <h1 className="text-2xl font-semibold tracking-tight">Trade History</h1>
             <p className="text-muted-foreground">View and analyze all your trading activity.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setDialogOpen(true)}
-            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            + Add Trade
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Import CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              + Add Trade
+            </button>
+          </div>
         </div>
 
         {/* KPI cards */}
@@ -222,9 +243,42 @@ export default function TradesPage() {
           </div>
         </div>
         {trades.length > 0 && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Trades ({trades.length})
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted-foreground">
+              Trades ({trades.length})
+            </p>
+            {confirmDeleteAll ? (
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteAllMutation.mutate();
+                    setConfirmDeleteAll(false);
+                  }}
+                  disabled={deleteAllMutation.isPending}
+                  className="text-sm text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                >
+                  {deleteAllMutation.isPending ? "Deleting…" : "Confirm delete all"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteAll(false)}
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteAll(true)}
+                className="text-sm text-muted-foreground hover:text-destructive"
+                title="Delete all trades"
+              >
+                Delete all
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -234,6 +288,7 @@ export default function TradesPage() {
         onSuccess={refetch}
         totalBalance={totalBalance}
       />
+      <ImportTradesModal open={importOpen} onOpenChange={setImportOpen} onSuccess={refetch} />
     </div>
   );
 }

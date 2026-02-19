@@ -61,6 +61,19 @@ export const SYMBOLS_BY_MARKET: Record<Market, string[]> = {
     "GBP/JPY",
     // Add more forex pairs below:
   ],
+  stocks: [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "NVDA",
+    "META",
+    "TSLA",
+    "BRK.B",
+    "JPM",
+    "V",
+    // Add more stock symbols below:
+  ],
 };
 
 export function getSymbolsForMarket(market: Market): string[] {
