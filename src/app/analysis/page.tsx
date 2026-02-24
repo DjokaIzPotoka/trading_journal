@@ -4,6 +4,8 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { getTrades, type Trade } from "../lib/trades";
+import { filterTradesByMarket } from "@/lib/tradeFilters";
+import { useMarketFilter } from "@/store/marketFilterStore";
 import { StatCards, type AnalysisStats } from "../components/analysis/StatCards";
 import { DistributionCharts } from "../components/analysis/DistributionCharts";
 import {
@@ -12,6 +14,7 @@ import {
 } from "../components/analysis/CumulativePnLChart";
 import { PerformanceByDayOfMonth } from "../components/analysis/PerformanceByDayOfMonth";
 import { MonthlyPerformance } from "../components/analysis/MonthlyPerformance";
+import { MarketFilterToggle } from "../components/shared/MarketFilterToggle";
 
 type Range = "30D" | "90D" | "All Time";
 
@@ -151,15 +154,21 @@ function buildMonthlyData(trades: Trade[]): {
 
 export default function AnalysisPage() {
   const [range, setRange] = React.useState<Range>("All Time");
+  const { marketFilter } = useMarketFilter();
 
   const { data: allTrades = [], isLoading } = useQuery({
     queryKey: ["trades", "all"],
     queryFn: () => getTrades({}),
   });
 
+  const tradesByMarket = React.useMemo(
+    () => filterTradesByMarket(allTrades, marketFilter),
+    [allTrades, marketFilter]
+  );
+
   const trades = React.useMemo(
-    () => filterTradesByRange(allTrades, range),
-    [allTrades, range]
+    () => filterTradesByRange(tradesByMarket, range),
+    [tradesByMarket, range]
   );
 
   const stats = React.useMemo(() => computeAnalysisStats(trades), [trades]);
@@ -173,13 +182,14 @@ export default function AnalysisPage() {
   const avgWin = winCount > 0 ? trades.filter((t) => t.pnl > 0).reduce((s, t) => s + t.pnl, 0) / winCount : 0;
   const avgLoss = lossCount > 0 ? trades.filter((t) => t.pnl < 0).reduce((s, t) => s + t.pnl, 0) / lossCount : 0;
   const marketCounts = React.useMemo(() => {
-    let crypto = 0, cfd = 0, forex = 0;
+    let crypto = 0, cfd = 0, forex = 0, stocks = 0;
     for (const t of trades) {
       if (t.market === "crypto") crypto++;
       else if (t.market === "cfd") cfd++;
-      else forex++;
+      else if (t.market === "forex") forex++;
+      else if (t.market === "stocks") stocks++;
     }
-    return { crypto, cfd, forex };
+    return { crypto, cfd, forex, stocks };
   }, [trades]);
   const largestWin = trades.length > 0 ? Math.max(...trades.filter((t) => t.pnl > 0).map((t) => t.pnl), 0) : 0;
   const largestLoss = trades.length > 0 ? Math.min(...trades.filter((t) => t.pnl < 0).map((t) => t.pnl), 0) : 0;
@@ -194,7 +204,8 @@ export default function AnalysisPage() {
               Detailed performance metrics and trading insights
             </p>
           </div>
-          <div className="mt-2 flex gap-2 sm:mt-0">
+          <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0">
+            <MarketFilterToggle />
             {(["30D", "90D", "All Time"] as const).map((r) => (
               <button
                 key={r}

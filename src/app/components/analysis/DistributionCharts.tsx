@@ -25,7 +25,7 @@ type DistributionChartsProps = {
   avgLoss: number;
   largestWin: number;
   largestLoss: number;
-  marketCounts: { crypto: number; cfd: number; forex: number };
+  marketCounts: { crypto: number; cfd: number; forex: number; stocks: number };
 };
 
 export function DistributionCharts({
@@ -51,17 +51,18 @@ export function DistributionCharts({
     { name: "Average Loss", value: Math.abs(Math.min(0, avgLoss)), fill: "#f87171" },
   ];
 
-  const totalMarket = marketCounts.crypto + marketCounts.cfd + marketCounts.forex;
+  const totalMarket = marketCounts.crypto + marketCounts.cfd + marketCounts.forex + marketCounts.stocks;
   const marketData: MarketData[] = [
     { name: "Crypto", value: marketCounts.crypto, pct: totalMarket > 0 ? (marketCounts.crypto / totalMarket) * 100 : 0 },
     { name: "CFD", value: marketCounts.cfd, pct: totalMarket > 0 ? (marketCounts.cfd / totalMarket) * 100 : 0 },
     { name: "Forex", value: marketCounts.forex, pct: totalMarket > 0 ? (marketCounts.forex / totalMarket) * 100 : 0 },
+    { name: "Stocks", value: marketCounts.stocks, pct: totalMarket > 0 ? (marketCounts.stocks / totalMarket) * 100 : 0 },
   ].filter((d) => d.value > 0);
   if (marketData.length === 0) marketData.push({ name: "No data", value: 1, pct: 100 });
 
   const WIN_COLOR = "#34d399";
   const LOSS_COLOR = "#f87171";
-  const MARKET_COLORS = ["#fb923c", "#60a5fa", "#a78bfa"];
+  const MARKET_COLORS = ["#fb923c", "#60a5fa", "#a78bfa", "#22c55e"];
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

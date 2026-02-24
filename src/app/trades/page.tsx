@@ -4,16 +4,19 @@ import * as React from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   getTrades,
-  getTradeStats,
   deleteTrade,
   deleteAllTrades,
   type Trade,
   type Market,
   type TradeType,
 } from "../lib/trades";
-import { getStartingBalance } from "../lib/settings";
+import { getStartingBalance, getStartingBalanceForFilter } from "../lib/settings";
+import { useMarketFilter } from "@/store/marketFilterStore";
+import { computeStatsFromTrades } from "@/lib/tradeFilters";
+import { MarketFilterToggle } from "../components/shared/MarketFilterToggle";
 import { AddTradeDialog } from "../components/trades/AddTradeDialog";
 import { ImportTradesModal } from "../components/trades/ImportTradesModal";
+import { TradeDetailsModal } from "../components/trades/TradeDetailsModal";
 
 function formatDate(iso: string) {
   try {
@@ -51,16 +54,20 @@ export default function TradesPage() {
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
   const [confirmDeleteAll, setConfirmDeleteAll] = React.useState(false);
+  const [selectedTrade, setSelectedTrade] = React.useState<Trade | null>(null);
+  const { marketFilter } = useMarketFilter();
 
+  const effectiveMarket =
+    marketFilter === "all" ? (market || undefined) : marketFilter;
   const filters = React.useMemo(
     () => ({
       symbol: search || undefined,
-      market: market || undefined,
+      market: effectiveMarket,
       type: type || undefined,
       from: from || undefined,
       to: to || undefined,
     }),
-    [search, market, type, from, to]
+    [search, effectiveMarket, type, from, to]
   );
 
   const { data: trades = [], isLoading: tradesLoading } = useQuery({
@@ -68,14 +75,13 @@ export default function TradesPage() {
     queryFn: () => getTrades(filters),
   });
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["tradeStats"],
-    queryFn: getTradeStats,
-  });
+  const stats = React.useMemo(() => computeStatsFromTrades(trades), [trades]);
 
+  const startingBalance =
+    marketFilter === "all" ? getStartingBalance() : getStartingBalanceForFilter(marketFilter);
   React.useEffect(() => {
-    setTotalBalance(getStartingBalance() + (stats?.total_pnl ?? 0));
-  }, [stats?.total_pnl]);
+    setTotalBalance(startingBalance + (stats?.total_pnl ?? 0));
+  }, [startingBalance, stats?.total_pnl]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteTrade,
@@ -106,7 +112,8 @@ export default function TradesPage() {
             <h1 className="text-2xl font-semibold tracking-tight">Trade History</h1>
             <p className="text-muted-foreground">View and analyze all your trading activity.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <MarketFilterToggle />
             <button
               type="button"
               onClick={() => setImportOpen(true)}
@@ -130,29 +137,29 @@ export default function TradesPage() {
             label="Total P&L"
             value={stats ? formatMoney(stats.total_pnl ?? 0) : "—"}
             positive={stats != null && (stats.total_pnl ?? 0) >= 0}
-            loading={statsLoading}
+            loading={tradesLoading}
           />
           <KpiCard
             label="Win Rate"
             value={stats ? `${(stats.win_rate_pct ?? 0).toFixed(1)}%` : "—"}
-            loading={statsLoading}
+            loading={tradesLoading}
           />
           <KpiCard
             label="Avg Win"
             value={stats && stats.avg_win != null ? formatMoney(stats.avg_win) : "$0.00"}
             positive
-            loading={statsLoading}
+            loading={tradesLoading}
           />
           <KpiCard
             label="Avg Loss"
             value={stats && stats.avg_loss != null ? formatMoney(stats.avg_loss) : "$0.00"}
             positive={false}
-            loading={statsLoading}
+            loading={tradesLoading}
           />
           <KpiCard
             label="Total Trades"
             value={stats ? String(stats.total_trades) : "—"}
-            loading={statsLoading}
+            loading={tradesLoading}
           />
         </div>
 
@@ -174,6 +181,7 @@ export default function TradesPage() {
             <option value="crypto">Crypto</option>
             <option value="cfd">CFD</option>
             <option value="forex">Forex</option>
+            <option value="stocks">Stocks</option>
           </select>
           <select
             value={type}
@@ -234,6 +242,7 @@ export default function TradesPage() {
                       key={t.id}
                       trade={t}
                       onDelete={() => deleteMutation.mutate(t.id)}
+                      onSelect={() => setSelectedTrade(t)}
                       isDeleting={deleteMutation.isPending}
                     />
                   ))
@@ -289,6 +298,11 @@ export default function TradesPage() {
         totalBalance={totalBalance}
       />
       <ImportTradesModal open={importOpen} onOpenChange={setImportOpen} onSuccess={refetch} />
+      <TradeDetailsModal
+        open={selectedTrade != null}
+        onOpenChange={(open) => !open && setSelectedTrade(null)}
+        trade={selectedTrade}
+      />
     </div>
   );
 }
@@ -327,17 +341,22 @@ function KpiCard({
 function TradeRow({
   trade,
   onDelete,
+  onSelect,
   isDeleting,
 }: {
   trade: Trade;
   onDelete: () => void;
+  onSelect: () => void;
   isDeleting: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const pnlPositive = trade.pnl >= 0;
 
   return (
-    <tr className="border-b border-border last:border-0 hover:bg-muted/20">
+    <tr
+      className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/20"
+      onClick={onSelect}
+    >
       <td className="px-4 py-3 font-medium">{trade.symbol}</td>
       <td className="px-4 py-3">
         <span
@@ -368,7 +387,7 @@ function TradeRow({
         {formatPct(trade.pnl_percent)}
       </td>
       <td className="px-4 py-3 text-muted-foreground">{formatDate(trade.created_at)}</td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
         {confirmDelete ? (
           <span className="flex items-center gap-1">
             <button

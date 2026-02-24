@@ -3,74 +3,83 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { getTrades, getTradeStats, type Trade } from "../lib/trades";
-import { getStartingBalance } from "../lib/settings";
+import { getTrades, type Trade } from "../lib/trades";
+import { getStartingBalanceForFilter } from "../lib/settings";
+import {
+  filterTradesByMarket,
+  computeCumulativePnL,
+  computeStatsFromTrades,
+  type CumulativePnLPoint,
+} from "@/lib/tradeFilters";
+import { useMarketFilter } from "@/store/marketFilterStore";
 import { StatCards } from "../components/dashboard/StatCards";
 import {
   CumulativePnLChart,
-  type CumulativePnLPoint,
 } from "../components/dashboard/CumulativePnLChart";
 import { RecentTrades } from "../components/dashboard/RecentTrades";
+import { MarketFilterToggle } from "../components/shared/MarketFilterToggle";
 
 type Range = "7D" | "30D" | "90D";
 
-function buildCumulativeData(trades: Trade[], range: Range): CumulativePnLPoint[] {
-  const sorted = [...trades].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
-  let cumulative = 0;
-  const points: CumulativePnLPoint[] = [];
-  for (const t of sorted) {
-    cumulative += t.pnl;
-    const d = new Date(t.created_at);
-    points.push({
-      date: d.toISOString(),
-      cumulativePnl: Math.round(cumulative * 100) / 100,
-      displayDate: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    });
-  }
+function applyRangeToPoints(
+  points: CumulativePnLPoint[],
+  range: Range
+): CumulativePnLPoint[] {
   if (points.length === 0) return [];
-
   const now = Date.now();
-  const ms: Record<Range, number> = { "7D": 7 * 24 * 60 * 60 * 1000, "30D": 30 * 24 * 60 * 60 * 1000, "90D": 90 * 24 * 60 * 60 * 1000 };
+  const ms: Record<Range, number> = {
+    "7D": 7 * 24 * 60 * 60 * 1000,
+    "30D": 30 * 24 * 60 * 60 * 1000,
+    "90D": 90 * 24 * 60 * 60 * 1000,
+  };
   const cutoff = now - ms[range];
   return points.filter((p) => new Date(p.date).getTime() >= cutoff);
 }
 
 export default function DashboardPage() {
   const [range, setRange] = React.useState<Range>("90D");
+  const { marketFilter } = useMarketFilter();
   const [startingBalance, setStartingBalance] = React.useState(0);
 
   React.useEffect(() => {
-    setStartingBalance(getStartingBalance());
-  }, []);
+    setStartingBalance(getStartingBalanceForFilter(marketFilter));
+  }, [marketFilter]);
 
   const { data: trades = [], isLoading: tradesLoading } = useQuery({
     queryKey: ["trades", "all"],
     queryFn: () => getTrades({}),
   });
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["tradeStats"],
-    queryFn: getTradeStats,
-  });
-
-  const totalPnl = stats?.total_pnl ?? 0;
-  const totalBalance = startingBalance + totalPnl;
-  const winRatePct = stats?.win_rate_pct ?? 0;
-  const totalTrades = stats?.total_trades ?? 0;
-  const totalFees = stats?.total_fees ?? 0;
-  const avgWin = stats?.avg_win ?? null;
-  const avgLoss = stats?.avg_loss ?? null;
-
-  const chartData = React.useMemo(
-    () => buildCumulativeData(trades, range),
-    [trades, range]
+  const filteredTrades = React.useMemo(
+    () => filterTradesByMarket(trades, marketFilter),
+    [trades, marketFilter]
   );
 
-  const recentTrades = React.useMemo(() => trades.slice(0, 5), [trades]);
+  const stats = React.useMemo(
+    () => computeStatsFromTrades(filteredTrades),
+    [filteredTrades]
+  );
 
-  const isLoading = tradesLoading || statsLoading;
+  const totalPnl = stats.total_pnl;
+  const totalBalance = startingBalance + totalPnl;
+  const winRatePct = stats.win_rate_pct ?? 0;
+  const totalTrades = stats.total_trades;
+  const totalFees = stats.total_fees;
+  const avgWin = stats.avg_win;
+  const avgLoss = stats.avg_loss;
+
+  const cumulativePoints = React.useMemo(
+    () => computeCumulativePnL(filteredTrades),
+    [filteredTrades]
+  );
+  const chartData = React.useMemo(
+    () => applyRangeToPoints(cumulativePoints, range),
+    [cumulativePoints, range]
+  );
+
+  const recentTrades = React.useMemo(() => filteredTrades.slice(0, 5), [filteredTrades]);
+
+  const isLoading = tradesLoading;
 
   return (
     <div className="min-h-screen bg-[#0B0F1A] text-white">
@@ -82,8 +91,11 @@ export default function DashboardPage() {
               Welcome back! Here&apos;s your trading overview.
             </p>
           </div>
-          <div className="mt-2 text-right text-xs text-white/50 sm:mt-0">
-            Last updated: {new Date().toLocaleDateString("en-US")}
+          <div className="mt-2 flex items-center gap-3 sm:mt-0">
+            <MarketFilterToggle />
+            <span className="text-right text-xs text-white/50">
+              Last updated: {new Date().toLocaleDateString("en-US")}
+            </span>
           </div>
         </header>
 
