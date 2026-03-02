@@ -10,6 +10,7 @@ import {
   BarChart3,
   FileDown,
   Activity,
+  Layers,
   Settings,
   ChevronLeft,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const NAV_ITEMS: { href: string; label: string; icon: React.ComponentType<{ clas
   { href: "/trades", label: "Trades", icon: TrendingUp },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analysis", label: "Analytics", icon: BarChart3 },
+  { href: "/strategies", label: "Strategies", icon: Layers },
   { href: "/simulations", label: "Simulations", icon: Activity },
   { href: "/reports", label: "Exports", icon: FileDown },
   { href: "/settings", label: "Settings", icon: Settings },
