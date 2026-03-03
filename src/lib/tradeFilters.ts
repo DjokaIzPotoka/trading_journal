@@ -5,7 +5,7 @@ export type MarketFilter = "all" | "crypto" | "stocks";
 /**
  * Filter trades by global market filter.
  * "crypto" => market === "crypto"
- * "stocks" => market === "stocks"
+ * "stocks" => market === "stocks" OR market === "cfd" (CFD displayed as Stocks)
  * "all" => all trades (crypto, stocks, forex, cfd, etc.)
  */
 export function filterTradesByMarket(
@@ -14,7 +14,8 @@ export function filterTradesByMarket(
 ): Trade[] {
   if (marketFilter === "all") return trades;
   if (marketFilter === "crypto") return trades.filter((t) => t.market === "crypto");
-  return trades.filter((t) => t.market === "stocks");
+  if (marketFilter === "stocks") return trades.filter((t) => t.market === "stocks" || t.market === "cfd");
+  return trades;
 }
 
 export type CumulativePnLPoint = {

@@ -10,12 +10,17 @@ import {
 import { insertTrade, type Market, type TradeType } from "../../lib/trades";
 import { getSymbolsForMarket } from "../../lib/symbols";
 
+function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 type FormValues = {
   symbol: string;
   market: Market;
   type: TradeType;
   entry_price: number;
   exit_price: number;
+  entry_date: string;
   qty: number;
   fees: number;
   notes: string;
@@ -30,6 +35,7 @@ const defaultValues: DefaultValues<FormValues> = {
   type: "long",
   entry_price: 0,
   exit_price: 0,
+  entry_date: "",
   qty: 0,
   fees: 0,
   notes: "",
@@ -84,6 +90,14 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
     setValue("symbol", "");
     setSymbolFilter("");
   }, [market, setValue]);
+
+  const prevOpenRef = React.useRef(false);
+  React.useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setValue("entry_date", getTodayDateString());
+    }
+    prevOpenRef.current = open;
+  }, [open, setValue]);
 
   // Lock body scroll when dialog is open; only dialog content should scroll
   React.useEffect(() => {
@@ -193,6 +207,7 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
         values.tags.trim() ? `Tags: ${values.tags.trim()}` : null,
         values.notes.trim() || null,
       ].filter(Boolean);
+      const entryDate = values.entry_date?.trim();
       await insertTrade({
         symbol: values.symbol.trim() || "—",
         type: values.type,
@@ -204,8 +219,10 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
         pnl: preview.pnl,
         pnl_percent: preview.pnlPct,
         notes: notesParts.length > 0 ? notesParts.join("\n\n") : null,
+        ...(entryDate ? { created_at: `${entryDate}T12:00:00.000Z` } : {}),
       });
       reset(defaultValues);
+      setValue("entry_date", getTodayDateString());
       setMarginMode("percent");
       setMarginPercent(25);
       setSymbolFilter("");
@@ -373,6 +390,16 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
                   className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                 />
               </div>
+            </div>
+
+            {/* Entry date */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Entry date</label>
+              <input
+                type="date"
+                {...register("entry_date")}
+                className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+              />
             </div>
 
             {/* Crypto: Position margin (full width), Fixed / % buttons next to textbox */}

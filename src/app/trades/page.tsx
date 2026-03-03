@@ -369,7 +369,7 @@ function TradeRow({
           {trade.type.toUpperCase()}
         </span>
       </td>
-      <td className="px-4 py-3 capitalize text-muted-foreground">{trade.market}</td>
+      <td className="px-4 py-3 capitalize text-muted-foreground">{trade.market === "cfd" ? "Stocks" : trade.market}</td>
       <td className="px-4 py-3 text-right">${trade.entry_price.toFixed(2)}</td>
       <td className="px-4 py-3 text-right">${trade.exit_price.toFixed(2)}</td>
       <td

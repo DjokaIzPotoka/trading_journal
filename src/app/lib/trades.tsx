@@ -48,7 +48,11 @@ export async function getTrades(params?: {
     query = query.ilike("symbol", `%${params.symbol.trim()}%`);
   }
   if (params?.market) {
-    query = query.eq("market", params.market);
+    if (params.market === "stocks") {
+      query = query.in("market", ["stocks", "cfd"]);
+    } else {
+      query = query.eq("market", params.market);
+    }
   }
   if (params?.type) {
     query = query.eq("type", params.type);
@@ -82,21 +86,27 @@ export async function insertTrade(row: {
   pnl_percent: number;
   notes?: string | null;
   qty: number;
+  /** Optional trade/entry date (ISO date string YYYY-MM-DD or full ISO). Used as created_at. */
+  created_at?: string;
 }) {
+  const insertPayload: Record<string, unknown> = {
+    symbol: row.symbol.trim(),
+    type: row.type,
+    market: row.market,
+    entry_price: row.entry_price,
+    exit_price: row.exit_price,
+    fees: row.fees,
+    pnl: row.pnl,
+    pnl_percent: row.pnl_percent,
+    notes: row.notes?.trim() || null,
+    qty: row.qty,
+  };
+  if (row.created_at) {
+    insertPayload.created_at = row.created_at;
+  }
   const { data, error } = await supabase
     .from("trades")
-    .insert({
-      symbol: row.symbol.trim(),
-      type: row.type,
-      market: row.market,
-      entry_price: row.entry_price,
-      exit_price: row.exit_price,
-      fees: row.fees,
-      pnl: row.pnl,
-      pnl_percent: row.pnl_percent,
-      notes: row.notes?.trim() || null,
-      qty: row.qty,
-    })
+    .insert(insertPayload)
     .select("id, created_at")
     .single();
   if (error) throw error;
