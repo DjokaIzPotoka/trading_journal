@@ -34,7 +34,7 @@ const defaultValues: DefaultValues<FormValues> = {
   fees: 0,
   notes: "",
   tags: "",
-  leverage: 0,
+  leverage: 30,
   position_margin: 0,
 };
 
@@ -67,8 +67,8 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
   const position_margin = watch("position_margin");
   const symbol = watch("symbol");
 
-  const [marginMode, setMarginMode] = React.useState<"fixed" | "percent">("fixed");
-  const [marginPercent, setMarginPercent] = React.useState<number>(0);
+  const [marginMode, setMarginMode] = React.useState<"fixed" | "percent">("percent");
+  const [marginPercent, setMarginPercent] = React.useState<number>(25);
 
   const isCrypto = market === "crypto";
   const symbolOptions = React.useMemo(() => getSymbolsForMarket(market), [market]);
@@ -137,6 +137,7 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
   }, [symbolOpen, symbolFilter, setValue]);
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
+  const round4 = (n: number) => Math.round(n * 10000) / 10000;
 
   // For crypto: position margin from % of balance when marginMode is "percent"
   React.useEffect(() => {
@@ -196,8 +197,8 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
         symbol: values.symbol.trim() || "—",
         type: values.type,
         market: values.market,
-        entry_price: round2(values.entry_price),
-        exit_price: round2(values.exit_price),
+        entry_price: round4(values.entry_price),
+        exit_price: round4(values.exit_price),
         qty: round2(values.qty),
         fees: round2(values.fees ?? 0),
         pnl: preview.pnl,
@@ -205,6 +206,8 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
         notes: notesParts.length > 0 ? notesParts.join("\n\n") : null,
       });
       reset(defaultValues);
+      setMarginMode("percent");
+      setMarginPercent(25);
       setSymbolFilter("");
       onOpenChange(false);
       onSuccess?.();
@@ -350,9 +353,9 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
                 </label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   min="0"
-                  placeholder="e.g. 43250"
+                  placeholder="e.g. 43250.1234"
                   {...register("entry_price", { valueAsNumber: true, min: 0 })}
                   className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                 />
@@ -363,9 +366,9 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
                 </label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.0001"
                   min="0"
-                  placeholder="e.g. 44890"
+                  placeholder="e.g. 44890.5678"
                   {...register("exit_price", { valueAsNumber: true, min: 0 })}
                   className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                 />
