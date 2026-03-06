@@ -38,7 +38,7 @@ export const SYMBOLS_BY_MARKET: Record<Market, string[]> = {
     "US100",
     "US500",
     "US30",
-    "NQ",
+    "USTEC",
     "ES",
     "YM",
     "XAU/USD",
