@@ -17,6 +17,7 @@ import {
   CumulativePnLChart,
 } from "../components/dashboard/CumulativePnLChart";
 import { RecentTrades } from "../components/dashboard/RecentTrades";
+import { AIPredictiveReport } from "../components/dashboard/AIPredictiveReport";
 import { MarketFilterToggle } from "../components/shared/MarketFilterToggle";
 
 type Range = "7D" | "30D" | "90D";
@@ -125,6 +126,10 @@ export default function DashboardPage() {
 
             <section>
               <RecentTrades trades={recentTrades} />
+            </section>
+
+            <section className="mt-8">
+              <AIPredictiveReport />
             </section>
           </>
         )}
