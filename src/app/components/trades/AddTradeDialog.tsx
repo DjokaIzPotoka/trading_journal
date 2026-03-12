@@ -392,9 +392,9 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
               </div>
             </div>
 
-            {/* Entry date */}
+            {/* Exit date */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">Entry date</label>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Exit date</label>
               <input
                 type="date"
                 {...register("entry_date")}
