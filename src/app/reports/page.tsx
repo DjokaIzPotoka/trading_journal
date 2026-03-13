@@ -153,7 +153,7 @@ export default function ReportsPage() {
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow transition hover:bg-blue-700 disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
-            {exporting ? "Exporting…" : "Export PDF"}
+            {exporting ? "Generating report and AI insights…" : "Export PDF"}
           </button>
         </header>
 
