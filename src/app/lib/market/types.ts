@@ -31,8 +31,10 @@ export type OptionChainResult = {
   expirationDates: number[];
   strikes: number[];
   options: OptionContract[];
-  /** Nearest expiration used (Unix ms) */
+  /** Nearest expiration used (Unix ms), or earliest in range for weekly */
   nearestExpiration: number;
+  /** When using a range (e.g. weekly), human-readable label for display */
+  expirationRangeLabel?: string;
 };
 
 export type MarketDataProvider = {
@@ -45,4 +47,57 @@ export type MarketDataProvider = {
   ): Promise<OptionChainResult | null>;
   /** List available expiration timestamps for a symbol */
   getOptionExpirations(symbol: string): Promise<number[]>;
+};
+
+// ─── Crypto (Binance / Deribit) types ───────────────────────────────────────
+
+export type CryptoAsset = "BTC" | "ETH";
+
+export type BinanceFuturesSnapshot = {
+  symbol: string;
+  price: number;
+  markPrice: number;
+  fundingRate: number;
+  nextFundingTime: number;
+  openInterest: number;
+  /** Optional 24h change from history if available */
+  openInterestChange24h?: number;
+};
+
+export type BinanceOIHistoryPoint = {
+  timestamp: number;
+  sumOpenInterest: number;
+  sumOpenInterestValue: number;
+};
+
+export type LiquidationLevel = {
+  price: number;
+  longLiqWeight: number;
+  shortLiqWeight: number;
+  totalWeight: number;
+  /** 0–1 normalized intensity for heatmap display (optional, set by model). */
+  intensity?: number;
+};
+
+/** Single bin from the modeled liquidation heatmap (for charting). */
+export type LiquidationHeatmapBin = {
+  price: number;
+  longLiqWeight: number;
+  shortLiqWeight: number;
+  totalWeight: number;
+  /** Normalized intensity 0–1 for heatmap shading. */
+  intensity: number;
+};
+
+export type LiquidationSummary = {
+  levels: LiquidationLevel[];
+  /** Bins with intensity for heatmap chart (same price range as levels). */
+  bins?: LiquidationHeatmapBin[];
+  currentPrice: number;
+  strongestDownsideCluster: number | null;
+  strongestUpsideCluster: number | null;
+  nearestDownsideFlushZone: number | null;
+  nearestUpsideSqueezeZone: number | null;
+  /** Human-readable bias e.g. "Long crowding" / "Short crowding" / "Balanced". */
+  marketBias?: string;
 };

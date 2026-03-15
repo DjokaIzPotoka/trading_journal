@@ -3,8 +3,24 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getGEXPageData, type GEXView, type GEXPagePayload } from "../lib/market/gexData";
+import { getCryptoGexPageData, type CryptoGexPagePayload } from "../lib/market/crypto-gex";
+import type { CryptoAsset } from "../lib/market/types";
+import { CryptoSummaryCards } from "../components/gex/CryptoSummaryCards";
+import { FuturesContextPanel } from "../components/gex/FuturesContextPanel";
+import { KeyLevelsGrid } from "../components/gex/KeyLevelsGrid";
+import { LiquidationHeatmapChart } from "../components/gex/LiquidationHeatmapChart";
+import { OptionsGexPanel } from "../components/gex/OptionsGexPanel";
+import { CryptoGexProfileChart } from "../components/gex/CryptoGexProfileChart";
+import { CryptoCallPutChart } from "../components/gex/CryptoCallPutChart";
+import { CryptoStrikeTable } from "../components/gex/CryptoStrikeTable";
+import { LiquidationClusterTable } from "../components/gex/LiquidationClusterTable";
+import { LiquidationZonesCard } from "../components/gex/LiquidationZonesCard";
+import { CryptoMarketSummary } from "../components/gex/CryptoMarketSummary";
 
 const VIEWS: GEXView[] = ["ES", "NQ", "Gold", "Silver"];
+type PageMode = "crypto" | "indices";
+type GEXTimeframe = "daily" | "weekly";
+const CRYPTO_ASSETS: CryptoAsset[] = ["BTC", "ETH"];
 
 function formatPrice(n: number): string {
   return `$${n.toFixed(2)}`;
@@ -18,38 +34,6 @@ function formatGEX(n: number): string {
   return n.toFixed(0);
 }
 
-function Card({
-  label,
-  value,
-  sub,
-  positive,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  positive?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-[#121826] p-4 shadow-lg">
-      <p className="text-xs font-medium uppercase tracking-wider text-white/60">
-        {label}
-      </p>
-      <p
-        className={`mt-1 text-xl font-semibold ${
-          positive === true ? "text-emerald-400" : ""
-        } ${positive === false ? "text-red-400" : ""} ${
-          positive === undefined ? "text-white" : ""
-        }`}
-      >
-        {value}
-      </p>
-      {sub != null && sub !== "" && (
-        <p className="mt-0.5 text-xs text-white/50">{sub}</p>
-      )}
-    </div>
-  );
-}
-
 function SkeletonCard() {
   return (
     <div className="rounded-xl border border-white/10 bg-[#121826] p-4 shadow-lg">
@@ -60,6 +44,9 @@ function SkeletonCard() {
 }
 
 export default function GEXPage() {
+  const [mode, setMode] = React.useState<PageMode>("crypto");
+  const [cryptoAsset, setCryptoAsset] = React.useState<CryptoAsset>("BTC");
+  const [timeframe, setTimeframe] = React.useState<GEXTimeframe>("daily");
   const [view, setView] = React.useState<GEXView>("ES");
 
   const {
@@ -71,6 +58,19 @@ export default function GEXPage() {
     queryKey: ["gex", view],
     queryFn: () => getGEXPageData(view),
     staleTime: 60 * 1000,
+    enabled: mode === "indices",
+  });
+
+  const {
+    data: cryptoPayload,
+    isLoading: cryptoLoading,
+    isError: cryptoError,
+    refetch: cryptoRefetch,
+  } = useQuery({
+    queryKey: ["gex-crypto", cryptoAsset, timeframe],
+    queryFn: () => getCryptoGexPageData(cryptoAsset, { timeframe }),
+    staleTime: 60 * 1000,
+    enabled: mode === "crypto",
   });
 
   const gex = payload?.gex ?? null;
@@ -78,35 +78,334 @@ export default function GEXPage() {
   const gexNotAvailable = payload?.gexNotAvailable ?? false;
   const error = payload?.error ?? null;
 
+  const isCrypto = mode === "crypto";
+  const cryptoData: CryptoGexPagePayload | null = cryptoPayload ?? null;
+  const cryptoLoadingState = isCrypto && cryptoLoading;
+  const cryptoErrorState = isCrypto && cryptoError;
+
   return (
     <div className="min-h-screen bg-[#0B0F1A] text-white">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="mb-8">
-          <h1 className="text-2xl font-semibold text-white">GEX</h1>
-          <p className="mt-1 text-sm text-white/60">
-            Gamma exposure and options-based positioning (ES proxy: SPY, NQ proxy: QQQ).
-          </p>
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* Header / controls — terminal-style */}
+        <header className="mb-8 border-b border-white/10 pb-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">GEX</h1>
+              <p className="mt-1 text-sm text-white/55">
+                {isCrypto
+                  ? "Crypto derivatives positioning, options gamma, and liquidation pressure"
+                  : "Gamma exposure and options-based positioning (ES proxy: SPY, NQ proxy: QQQ)."}
+              </p>
+              {isCrypto && (
+                <p className="mt-0.5 text-xs text-white/40">
+                  {timeframe === "daily"
+                    ? "Daily: nearest expiry only."
+                    : "Weekly: next 7 days aggregated by strike."}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {isCrypto && cryptoData && (
+                <>
+                  <span className="text-xs text-white/45">
+                    {new Date(cryptoData.lastUpdated).toLocaleString()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => cryptoRefetch()}
+                    className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10"
+                  >
+                    Refresh
+                  </button>
+                </>
+              )}
+              <div className="flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1">
+                <button
+                  type="button"
+                  onClick={() => setMode("crypto")}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    mode === "crypto"
+                      ? "bg-white/10 text-white"
+                      : "text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  Crypto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("indices")}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    mode === "indices"
+                      ? "bg-white/10 text-white"
+                      : "text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  Indices
+                </button>
+              </div>
+              {isCrypto && (
+                <>
+                  <div className="flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1">
+                    <button
+                      type="button"
+                      onClick={() => setTimeframe("daily")}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        timeframe === "daily"
+                          ? "bg-white/10 text-white"
+                          : "text-white/50 hover:text-white/80"
+                      }`}
+                    >
+                      Daily
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimeframe("weekly")}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        timeframe === "weekly"
+                          ? "bg-white/10 text-white"
+                          : "text-white/50 hover:text-white/80"
+                      }`}
+                    >
+                      Weekly
+                    </button>
+                  </div>
+                  <div className="flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1">
+                    {CRYPTO_ASSETS.map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => setCryptoAsset(a)}
+                        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                          cryptoAsset === a
+                            ? "bg-white/10 text-white"
+                            : "text-white/50 hover:text-white/80"
+                        }`}
+                      >
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {mode === "indices" && (
+                <div className="flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1">
+                  {VIEWS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setView(v)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        view === v
+                          ? "bg-white/10 text-white"
+                          : "text-white/50 hover:text-white/80"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
-        {/* View tabs */}
-        <div className="mb-6 flex gap-2">
-          {VIEWS.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                view === v
-                  ? "bg-white/10 text-white"
-                  : "text-white/60 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+        {/* Crypto mode content */}
+        {isCrypto && (
+          <>
+            {cryptoLoadingState && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <SkeletonCard key={i} />
+                  ))}
+                </div>
+                <div className="rounded-xl border border-white/10 bg-[#121826] p-5">
+                  <div className="h-8 w-48 animate-pulse rounded bg-white/10" />
+                  <div className="mt-4 h-64 animate-pulse rounded bg-white/5" />
+                </div>
+              </div>
+            )}
 
-        {isLoading && (
+            {cryptoErrorState && (
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                <p className="text-sm text-red-300">Failed to load crypto data.</p>
+                <button
+                  type="button"
+                  onClick={() => cryptoRefetch()}
+                  className="mt-2 rounded bg-red-500/20 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/30"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!cryptoLoadingState && !cryptoErrorState && cryptoData && (
+              <>
+                {cryptoData.errors.length > 0 && (
+                  <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+                    {cryptoData.errors.join(" ")}
+                    <button
+                      type="button"
+                      onClick={() => cryptoRefetch()}
+                      className="ml-2 underline"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {/* 1. Hero analytics strip */}
+                <CryptoSummaryCards
+                  price={cryptoData.futures?.price ?? null}
+                  markPrice={cryptoData.futures?.markPrice ?? null}
+                  fundingRate={cryptoData.futures?.fundingRate ?? null}
+                  openInterest={cryptoData.futures?.openInterest ?? null}
+                  oiChange24h={cryptoData.futures?.openInterestChange24h ?? null}
+                  netGEX={cryptoData.gex?.netGEX ?? null}
+                  gammaRegime={cryptoData.gex?.gammaRegime ?? null}
+                  zeroGammaLevel={cryptoData.gex?.zeroGammaLevel ?? null}
+                  callWall={cryptoData.gex?.callWall ?? null}
+                  putWall={cryptoData.gex?.putWall ?? null}
+                  nearestExpirationUsed={cryptoData.gex?.nearestExpirationUsed ?? null}
+                />
+
+                {/* 2. Key levels grid */}
+                {cryptoData.gex && cryptoData.futures?.markPrice != null && (
+                  <KeyLevelsGrid
+                    spotPrice={cryptoData.futures.markPrice}
+                    zeroGammaLevel={cryptoData.gex.zeroGammaLevel ?? null}
+                    callWall={cryptoData.gex.callWall ?? null}
+                    putWall={cryptoData.gex.putWall ?? null}
+                    strongestPositiveStrike={cryptoData.gex.strongestPositiveStrike ?? null}
+                    strongestNegativeStrike={cryptoData.gex.strongestNegativeStrike ?? null}
+                  />
+                )}
+
+                {/* Futures context — compact */}
+                <section className="mb-10">
+                  <FuturesContextPanel
+                    futures={cryptoData.futures}
+                    fallbackMessage="Binance futures data unavailable."
+                  />
+                </section>
+
+                {/* Liquidation heatmap */}
+                {cryptoData.liquidationSummary && cryptoData.futures && (
+                  <section className="mb-10">
+                    <LiquidationHeatmapChart
+                      levels={cryptoData.liquidationSummary.levels}
+                      spotPrice={cryptoData.liquidationSummary.currentPrice ?? cryptoData.futures.markPrice}
+                      bins={cryptoData.liquidationSummary.bins}
+                      strongestDownsideCluster={cryptoData.liquidationSummary.strongestDownsideCluster}
+                      strongestUpsideCluster={cryptoData.liquidationSummary.strongestUpsideCluster}
+                    />
+                  </section>
+                )}
+
+                {/* 4. Net GEX chart — full width anchor */}
+                {cryptoData.gex && cryptoData.gex.strikeExposures.length > 0 && (
+                  <section className="mb-10">
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold text-white">
+                        Net GEX by strike
+                      </h2>
+                      <p className="mt-1 text-sm text-white/50">
+                        Gamma exposure profile across strikes. Primary structural view.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-[#121826] p-6">
+                      <CryptoGexProfileChart
+                        strikeExposures={cryptoData.gex.strikeExposures}
+                        spotPrice={cryptoData.gex.spotPrice}
+                        compact
+                      />
+                    </div>
+                  </section>
+                )}
+
+                {/* 5. Call / Put by strike chart */}
+                {cryptoData.gex && cryptoData.gex.strikeExposures.length > 0 && (
+                  <section className="mb-10">
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold text-white">
+                        Call / Put GEX by Strike
+                      </h2>
+                      <p className="mt-1 text-sm text-white/50">
+                        Hover over bars to see detailed values
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-[#121826] p-6">
+                      <CryptoCallPutChart
+                        strikeExposures={cryptoData.gex.strikeExposures}
+                        spotPrice={cryptoData.gex.spotPrice}
+                        zeroGamma={cryptoData.gex.zeroGammaLevel ?? null}
+                        putWall={cryptoData.gex.putWall ?? null}
+                        callWall={cryptoData.gex.callWall ?? null}
+                        volTrigger={cryptoData.gex.volTrigger ?? null}
+                        compact
+                      />
+                    </div>
+                  </section>
+                )}
+
+                {/* Options GEX panel — supporting */}
+                <section className="mb-10">
+                  <OptionsGexPanel
+                    gex={cryptoData.gex}
+                    fallbackMessage="Deribit options data unavailable."
+                  />
+                </section>
+
+                {/* 6. Tables / aggregates */}
+                {cryptoData.gex && cryptoData.gex.strikeExposures.length > 0 && (
+                  <section className="mb-10">
+                    <div className="mb-4">
+                      <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">
+                        Strike aggregates
+                      </h2>
+                    </div>
+                    <CryptoStrikeTable strikeExposures={cryptoData.gex.strikeExposures} />
+                  </section>
+                )}
+
+                {cryptoData.liquidationSummary && cryptoData.futures && (
+                  <section className="mb-10">
+                    <LiquidationClusterTable
+                      levels={cryptoData.liquidationSummary.levels}
+                      spotPrice={cryptoData.futures.markPrice}
+                    />
+                  </section>
+                )}
+
+                <section className="mb-10 grid gap-6 sm:grid-cols-2">
+                  {cryptoData.liquidationSummary && cryptoData.futures && (
+                    <LiquidationZonesCard
+                      summary={cryptoData.liquidationSummary}
+                      spotPrice={cryptoData.futures.markPrice}
+                    />
+                  )}
+                  <CryptoMarketSummary
+                    summary={cryptoData.gex?.marketSummary ?? "No summary available."}
+                    title="Market summary"
+                  />
+                </section>
+
+                <section className="rounded-xl border border-white/10 bg-[#121826] p-5">
+                  <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-white/60">
+                    Methodology
+                  </h2>
+                  <p className="text-sm leading-relaxed text-white/55">
+                    Crypto GEX uses Binance USD-M futures (price, mark, funding, OI) and Deribit options (BTC/ETH).
+                    Gamma exposure = gamma × open interest × contract size × spot² (calls +, puts −). Gamma from Deribit when available, else Black-Scholes. Liquidation heatmap is estimated from OI and leverage buckets, not exact exchange data.
+                  </p>
+                </section>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Indices mode: loading */}
+        {mode === "indices" && isLoading && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -120,7 +419,7 @@ export default function GEXPage() {
           </div>
         )}
 
-        {isError && (
+        {mode === "indices" && isError && (
           <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
             <p className="text-sm text-red-300">Failed to load data.</p>
             <button
@@ -133,7 +432,7 @@ export default function GEXPage() {
           </div>
         )}
 
-        {!isLoading && !isError && payload && (
+        {mode === "indices" && !isLoading && !isError && payload && (
           <>
             {error && (
               <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
@@ -149,124 +448,128 @@ export default function GEXPage() {
             )}
 
             {/* Underlying / proxy label */}
-            <p className="mb-4 text-sm text-white/50">
+            <p className="mb-6 text-sm text-white/50">
               {view === "ES" && "ES=F + SPY options"}
               {view === "NQ" && "NQ=F + QQQ options"}
               {view === "Gold" && "GC=F"}
               {view === "Silver" && "SI=F"}
             </p>
 
-            {/* Metric cards */}
-            <section className="mb-8">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
-                <Card
-                  label="Spot / Futures"
-                  value={quote ? formatPrice(quote.price) : "—"}
-                  sub={
-                    quote?.changePercent != null
-                      ? `${quote.changePercent >= 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%`
-                      : undefined
-                  }
-                  positive={
-                    quote?.changePercent != null
-                      ? quote.changePercent >= 0
-                      : undefined
-                  }
-                />
+            {/* Hero analytics strip — Indices */}
+            <section className="mb-10">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">
+                Market snapshot
+              </h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="rounded-xl border border-white/10 bg-[#121826] p-4 shadow-lg">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Spot</p>
+                  <p className="mt-2 text-2xl font-bold tabular-nums text-white">
+                    {quote ? formatPrice(quote.price) : "—"}
+                  </p>
+                  {quote?.changePercent != null && (
+                    <p className={`mt-1 text-xs ${quote.changePercent >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {quote.changePercent >= 0 ? "+" : ""}{quote.changePercent.toFixed(2)}%
+                    </p>
+                  )}
+                </div>
                 {gex && (
                   <>
-                    <Card
-                      label="Net GEX"
-                      value={formatGEX(gex.netGEX)}
-                      positive={gex.netGEX >= 0}
-                    />
-                    <Card
-                      label="Gamma regime"
-                      value={gex.gammaRegime}
-                    />
-                    <Card
-                      label="Zero gamma"
-                      value={
-                        gex.zeroGammaLevel != null
-                          ? formatPrice(gex.zeroGammaLevel)
-                          : "—"
-                      }
-                    />
-                    <Card
-                      label="Call wall"
-                      value={
-                        gex.callWall != null
-                          ? formatPrice(gex.callWall)
-                          : "—"
-                      }
-                    />
-                    <Card
-                      label="Put wall"
-                      value={
-                        gex.putWall != null
-                          ? formatPrice(gex.putWall)
-                          : "—"
-                      }
-                    />
+                    <div className={`rounded-xl border p-4 shadow-lg ${gex.netGEX >= 0 ? "bg-emerald-500/5 border-emerald-500/15" : "bg-red-500/5 border-red-500/15"}`}>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Net GEX</p>
+                      <p className={`mt-2 text-2xl font-bold tabular-nums ${gex.netGEX >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {formatGEX(gex.netGEX)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-[#121826] p-4 shadow-lg">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Gamma regime</p>
+                      <p className="mt-2 text-2xl font-bold text-white">{gex.gammaRegime}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-lg">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Zero gamma</p>
+                      <p className="mt-2 text-2xl font-bold text-white">
+                        {gex.zeroGammaLevel != null ? formatPrice(gex.zeroGammaLevel) : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4 shadow-lg">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Call wall</p>
+                      <p className="mt-2 text-2xl font-bold text-white">
+                        {gex.callWall != null ? formatPrice(gex.callWall) : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-red-500/15 bg-red-500/5 p-4 shadow-lg">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Put wall</p>
+                      <p className="mt-2 text-2xl font-bold text-white">
+                        {gex.putWall != null ? formatPrice(gex.putWall) : "—"}
+                      </p>
+                    </div>
                   </>
                 )}
                 {gexNotAvailable && (
-                  <div className="col-span-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60">
+                  <div className="col-span-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60">
                     Full GEX is not available for this instrument in this version. Price and trend context only.
                   </div>
                 )}
               </div>
               {gex && (
-                <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <Card
-                    label="P/C OI ratio"
-                    value={
-                      gex.putCallOIRatio != null
-                        ? gex.putCallOIRatio.toFixed(2)
-                        : "—"
-                    }
-                  />
-                  <Card
-                    label="Nearest exp."
-                    value={gex.nearestExpirationUsed}
-                  />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1 text-xs text-white/60">
+                    P/C OI {gex.putCallOIRatio != null ? gex.putCallOIRatio.toFixed(2) : "—"}
+                  </span>
+                  <span className="rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1 text-xs text-white/60">
+                    Exp. {gex.nearestExpirationUsed}
+                  </span>
                 </div>
               )}
             </section>
 
+            {/* Key levels grid — Indices */}
+            {gex && quote && (
+              <KeyLevelsGrid
+                spotPrice={quote.price}
+                zeroGammaLevel={gex.zeroGammaLevel ?? null}
+                callWall={gex.callWall ?? null}
+                putWall={gex.putWall ?? null}
+                strongestPositiveStrike={gex.strongestPositiveStrike ?? null}
+                strongestNegativeStrike={gex.strongestNegativeStrike ?? null}
+              />
+            )}
+
             {/* Strike exposure table */}
             {gex && gex.strikeExposures.length > 0 && (
-              <section className="mb-8">
-                <h2 className="mb-4 text-lg font-semibold text-white">
-                  Strike exposure
+              <section className="mb-10">
+                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white/60">
+                  Strike aggregates
                 </h2>
                 <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#121826]">
                   <table className="w-full min-w-[400px] text-sm">
                     <thead>
                       <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-white/60">
-                        <th className="p-3">Strike</th>
-                        <th className="p-3 text-right">Call exposure</th>
-                        <th className="p-3 text-right">Put exposure</th>
-                        <th className="p-3 text-right">Net</th>
+                        <th className="p-4">Strike</th>
+                        <th className="p-4 text-right">Call exposure</th>
+                        <th className="p-4 text-right">Put exposure</th>
+                        <th className="p-4 text-right">Net</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {gex.strikeExposures.slice(0, 50).map((row) => (
+                      {[...gex.strikeExposures]
+                        .sort((a, b) => Math.abs(b.netExposure) - Math.abs(a.netExposure))
+                        .slice(0, 10)
+                        .map((row) => (
                         <tr
                           key={row.strike}
                           className="border-b border-white/5 hover:bg-white/[0.02]"
                         >
-                          <td className="p-3 font-medium text-white">
+                          <td className="p-4 font-medium tabular-nums text-white">
                             {formatPrice(row.strike)}
                           </td>
-                          <td className="p-3 text-right text-emerald-400/90">
+                          <td className="p-4 text-right tabular-nums text-emerald-400/90">
                             {formatGEX(row.callExposure)}
                           </td>
-                          <td className="p-3 text-right text-red-400/90">
+                          <td className="p-4 text-right tabular-nums text-red-400/90">
                             {formatGEX(row.putExposure)}
                           </td>
                           <td
-                            className={`p-3 text-right ${
+                            className={`p-4 text-right tabular-nums ${
                               row.netExposure >= 0
                                 ? "text-emerald-400/90"
                                 : "text-red-400/90"
@@ -278,57 +581,35 @@ export default function GEXPage() {
                       ))}
                     </tbody>
                   </table>
-                  {gex.strikeExposures.length > 50 && (
+                  {gex.strikeExposures.length > 10 && (
                     <p className="p-3 text-xs text-white/50">
-                      Showing first 50 of {gex.strikeExposures.length} strikes.
+                      Top 10 by net GEX magnitude (of {gex.strikeExposures.length} strikes).
                     </p>
                   )}
                 </div>
               </section>
             )}
 
-            {/* Market context & key levels */}
+            {/* Market summary — Indices */}
             {gex && (
-              <section className="mb-8 grid gap-6 sm:grid-cols-2">
+              <section className="mb-10">
                 <div className="rounded-xl border border-white/10 bg-[#121826] p-5">
-                  <h2 className="mb-2 text-lg font-semibold text-white">
-                    Market context summary
+                  <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-white/60">
+                    Market summary
                   </h2>
                   <p className="text-sm leading-relaxed text-white/70">
                     {gex.marketSummary}
                   </p>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-[#121826] p-5">
-                  <h2 className="mb-2 text-lg font-semibold text-white">
-                    Key levels
-                  </h2>
-                  <ul className="space-y-1 text-sm text-white/70">
-                    {gex.zeroGammaLevel != null && (
-                      <li>Zero gamma (approx.): {formatPrice(gex.zeroGammaLevel)}</li>
-                    )}
-                    {gex.callWall != null && (
-                      <li>Call wall: {formatPrice(gex.callWall)}</li>
-                    )}
-                    {gex.putWall != null && (
-                      <li>Put wall: {formatPrice(gex.putWall)}</li>
-                    )}
-                    {gex.strongestPositiveStrike != null && (
-                      <li>Strongest + strike: {formatPrice(gex.strongestPositiveStrike)}</li>
-                    )}
-                    {gex.strongestNegativeStrike != null && (
-                      <li>Strongest − strike: {formatPrice(gex.strongestNegativeStrike)}</li>
-                    )}
-                  </ul>
                 </div>
               </section>
             )}
 
             {/* Methodology */}
             <section className="rounded-xl border border-white/10 bg-[#121826] p-5">
-              <h2 className="mb-2 text-lg font-semibold text-white">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-white/60">
                 Methodology
               </h2>
-              <p className="text-sm leading-relaxed text-white/60">
+              <p className="text-sm leading-relaxed text-white/55">
                 GEX is computed as gamma × open interest × contract size × spot² × sign (calls +1, puts −1).
                 ES context uses SPY options; NQ context uses QQQ options. Gamma is from the data provider when available, otherwise approximated via Black-Scholes. Zero gamma level is the strike where cumulative net exposure flips sign. Gold and Silver show futures price context only; full options GEX for these underlyings is not included in this version.
               </p>

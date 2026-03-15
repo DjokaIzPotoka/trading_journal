@@ -201,7 +201,11 @@ export const YahooMarketDataProvider: MarketDataProvider = {
         puts: v.puts ?? [],
       }));
     } else if (Array.isArray(data.calls) || Array.isArray(data.puts)) {
-      const exp = (data.expirationDate ?? (data.expirationDates as number[])?.[0]) ?? Date.now() / 1000 + 86400 * 7;
+      const expRaw = (data.expirationDate ?? (data.expirationDates as number[])?.[0]) ?? Date.now() / 1000 + 86400 * 7;
+      const exp: number | string | Date =
+        typeof expRaw === "number" || typeof expRaw === "string" || expRaw instanceof Date
+          ? expRaw
+          : Number(expRaw) || Date.now() / 1000 + 86400 * 7;
       optionsArray = [{
         expirationDate: exp,
         calls: (data.calls as YahooOptionRow[]) ?? [],
